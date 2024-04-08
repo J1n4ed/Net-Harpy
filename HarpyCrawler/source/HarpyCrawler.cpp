@@ -42,10 +42,11 @@ struct page_processor : public harpy::Task
 		const std::string& _host,
 		std::vector<std::string>& _storage,
 		const int& _depth,
-		std::map<int, std::queue<std::string> *>& _linksQ,
+		std::map<int, std::queue<std::string>*>& _linksQ,
 		const int& _stage,
 		std::vector<harpy::WebPage>& _indexed_pages,
-		std::mutex & _mute
+		std::mutex& _mute,
+		std::shared_ptr<harpy::DBASE> _dbase
 	
 	) : Task(id)
 	
@@ -63,11 +64,16 @@ struct page_processor : public harpy::Task
 		linksQ = &_linksQ;
 		mute = &_mute;
 		indexed_pages = &_indexed_pages;
-
+		dbase = std::move(_dbase);
 	};
+
+	
 
 	void one_thread_method() override
 	{
+		bool canContinue = true;
+		std::string page;
+
 		// CURL GET		
 		mute->lock();
 		std::cout << "\n> Page processor started for URL: " << host <<
@@ -84,51 +90,72 @@ struct page_processor : public harpy::Task
 
 		std::unique_ptr<harpy::Webget> Getter(new harpy::Webget);
 
-		if (host.find("https:/") != std::string::npos)
-			Getter->setHost(host, std::to_string(HTTPS_PORT));
-		else if (host.find("http:/") != std::string::npos)
-			Getter->setHost(host, std::to_string(HTTP_PORT));
-		else
-			Getter->setHost(host, std::to_string(HTTPS_PORT));
+		try 
+		{		
+			if (host.find("https:/") != std::string::npos)
+				Getter->setHost(host, std::to_string(HTTPS_PORT));
+			else if (host.find("http:/") != std::string::npos)
+				Getter->setHost(host, std::to_string(HTTP_PORT));
+			else
+				Getter->setHost(host, std::to_string(HTTPS_PORT));
 
-		Getter->curlGet();
-		std::string page = Getter->getData();
-		Getter->cleanGetter();
+			Getter->curlGet();
 
-		// Send page to indexer
-		std::unique_ptr<harpy::Indexer> Index(new harpy::Indexer(page, host, isLast));
+			page = Getter->getData();
 
-		// Get back indexed structure
-		harpy::WebPage indexedPage = Index->getResult();
-		page.clear();
-		std::cout << std::endl;
-
-		mute->lock();
-
-		if (!indexedPage.get_isLinksEmpty())
+			Getter->cleanGetter();
+		}
+		catch (std::exception & e)
 		{
-			std::vector<std::string> tmp = indexedPage.get_links();
+			std::cout << "\nCURL ERR: " << e.what();
+			canContinue = false;
+		}
 
-			for (const auto & url : *storage)
+		if (canContinue)
+		{
+			// Send page to indexer
+			std::unique_ptr<harpy::Indexer> Index(new harpy::Indexer(page, host, isLast));
+
+			// Get back indexed structure
+			harpy::WebPage indexedPage = Index->getResult();
+			page.clear();
+			std::cout << std::endl;
+
+			mute->lock();
+
+			if (!indexedPage.get_isLinksEmpty())
 			{
-				auto pos = std::find(tmp.begin(), tmp.end(), url);
+				std::vector<std::string> tmp = indexedPage.get_links();
 
-				if (pos != tmp.end())
+				for (const auto& url : *storage)
 				{
-					tmp.erase(pos);
+					auto pos = std::find(tmp.begin(), tmp.end(), url);
+
+					if (pos != tmp.end())
+					{
+						tmp.erase(pos);
+					}
+				}
+
+				for (const auto it : tmp)
+				{
+					linksQ->find(current_stage + 1)->second->push(it);
+					storage->push_back(it);
 				}
 			}
 
-			for (const auto it : tmp)
-			{				
-				linksQ->find(current_stage + 1)->second->push(it);
-				storage->push_back(it);
-			}			
-		}		
-		if (indexedPage.get_links().size() != 0)
-			indexed_pages->push_back(indexedPage);
+			if (!indexedPage.get_wordslib().empty())
+				indexed_pages->push_back(indexedPage);
 
-		mute->unlock();
+			mute->unlock();
+
+			dbase->process_page(indexedPage);
+
+		}
+		else
+		{
+			return;
+		}
 	}
 
 private:
@@ -142,6 +169,7 @@ private:
 	std::map<int, std::queue<std::string> *> * linksQ;
 	bool isLast = false;
 	std::vector<harpy::WebPage> * indexed_pages;
+	std::shared_ptr<harpy::DBASE> dbase;
 };
 
 // 
@@ -159,7 +187,8 @@ int main(int argc, char* argv[])
 	harpy::get_version();
 
 	std::string connectionString;
-	std::unique_ptr<harpy::DBASE> base;
+	// std::unique_ptr<harpy::DBASE> base;
+	std::shared_ptr<harpy::DBASE> base;
 	std::string confFile = "./cfg/cfg.ini";
 
 	std::string startPage;
@@ -445,7 +474,8 @@ int main(int argc, char* argv[])
 
 	try
 	{
-		base = std::make_unique<harpy::DBASE>(connectionString);		
+		// base = std::make_unique<harpy::DBASE>(connectionString);		
+		base = std::make_shared<harpy::DBASE>(connectionString);
 
 		std::cout << std::endl;
 
@@ -518,7 +548,6 @@ int main(int argc, char* argv[])
 
 					mute->unlock();
 
-
 					if (currentStage > Depth && !findOccupied)
 					{
 						linksQIsEmpty = true;
@@ -552,14 +581,12 @@ int main(int argc, char* argv[])
 
 				if (linksQ.find(currentStage)->second->empty())
 				{
-					
+					// skip
 				}
 				else
 				{
-				currentURL = linksQ.find(currentStage)->second->front();
-
-				linksQ.find(currentStage)->second->pop();
-
+					currentURL = linksQ.find(currentStage)->second->front();
+					linksQ.find(currentStage)->second->pop();
 				}
 
 				mute->unlock();
@@ -582,6 +609,7 @@ int main(int argc, char* argv[])
 		{
 
 			if (currentURL != " ")
+
 				// function to run in multithread
 				thread_pool.add_task(
 
@@ -594,7 +622,8 @@ int main(int argc, char* argv[])
 						std::ref(linksQ),
 						currentStage,
 						std::ref(indexed_pages),
-						*mute
+						*mute,
+						base
 					)		
 			);	
 
@@ -621,7 +650,7 @@ int main(int argc, char* argv[])
 		std::cout << "\n > " << pages.get_title();
 	}
 
-	base->process_pages(indexed_pages);
+	// base->process_pages(indexed_pages);
 
 	// CLEANUP
 	

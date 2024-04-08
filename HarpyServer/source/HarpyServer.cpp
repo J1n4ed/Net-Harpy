@@ -205,12 +205,12 @@ http::message_generator handle_request(beast::string_view doc_root, http::reques
             << "<html>\n"           
             << "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n"
             << "<head>\n"
-            << "<title>HARPY CRAWLER</title>\n"
-            << "</head>\n"
-            << "<body>\n"
-            << "<div>\n"
-            << "<h1>Search some web, ehehe</h1>\n"
+            << "<div align=\"center\">\n"
+            << "<img src=\"https://i.ibb.co/rbDFD5y/harpy.png\" alt=\"Harpy the Hunter\" width=\"350\" height=\"350\">\n"
             << "</div>\n"
+            << "<title>Harpy Web Search</title>\n"
+            << "</head>\n"
+            << "<body>\n"            
             << "<div>\n"
             << "<h2 align=\"center\">Harpy Search</h2>\n"
             << "</div>\n"
@@ -231,8 +231,7 @@ http::message_generator handle_request(beast::string_view doc_root, http::reques
             << get_search_result(searchValue)
             << "\n</span></div>\n"
             << "</body>\n"
-            << "</html>";
-       
+            << "</html>";      
     }
     else if (req.method() == http::verb::get)
     {        
@@ -241,12 +240,12 @@ http::message_generator handle_request(beast::string_view doc_root, http::reques
             << "<html>\n"
             << "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\">\n"
             << "<head>\n"
-            << "<title>HARPY CRAWLER</title>\n"
-            << "</head>\n"
-            << "<body>\n"
-            << "<div>\n"
-            << "<h1>Search some web, ehehe</h1>\n"
+            << "<div align=\"center\">\n"
+            << "<img src=\"https://i.ibb.co/rbDFD5y/harpy.png\" alt=\"Harpy the Hunter\" width=\"350\" height=\"350\">\n"
             << "</div>\n"
+            << "<title>Harpy Web Search</title>\n"
+            << "</head>\n"
+            << "<body>\n"           
             << "<div>\n"
             << "<h2 align=\"center\">Harpy Search</h2>\n"
             << "</div>\n"
@@ -578,10 +577,6 @@ int main(int argc, char* argv[])
 
                 address = net::ip::make_address(value);
                 std::cout << "\n> server host:\t\t" << address.to_string();
-
-                /*auto value = parser->get_value<double>("Settings.Srv_Host");
-                address = net::ip::make_address(std::to_string(value));
-                std::cout << "\n> server host:\t\t" << address.to_string();*/
             }
             catch (const harpy::data_not_found& ex)
             {
@@ -659,32 +654,40 @@ int main(int argc, char* argv[])
 
     } // while (!isInitSuccess)
 
-    // The io_context is required for all I/O
-    net::io_context ioc{ threads };
+    try
+    {
+        // The io_context is required for all I/O
+        net::io_context ioc{ threads };
 
-    // The SSL context is required, and holds certificates
-    ssl::context ctx{ ssl::context::tlsv12 };
+        // The SSL context is required, and holds certificates
+        ssl::context ctx{ ssl::context::tlsv12 };
 
-    // This holds the self-signed certificate used by the server
-    // load_server_certificate(ctx);
-    ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::single_dh_use);
-    // ctx.set_password_callback(boost::bind(&server::get_password, this));
-    ctx.use_certificate_chain_file("user.crt");
-    ctx.use_private_key_file("user.key", boost::asio::ssl::context::pem);
-    ctx.use_tmp_dh_file("dh2048.pem");
+        // This holds the self-signed certificate used by the server
+        // load_server_certificate(ctx);
+        ctx.set_options(boost::asio::ssl::context::default_workarounds | boost::asio::ssl::context::no_sslv2 | boost::asio::ssl::context::single_dh_use);
+        // ctx.set_password_callback(boost::bind(&server::get_password, this));
+        ctx.use_certificate_chain_file(".//crt//user.crt");
+        ctx.use_private_key_file(".//crt//user.key", boost::asio::ssl::context::pem);
+        ctx.use_tmp_dh_file(".//crt//dh2048.pem");
 
-    // Create and launch a listening port
-    std::make_shared<listener>(ioc, ctx, tcp::endpoint{ address, port }, doc_root)->run();
+        // Create and launch a listening port
+        std::make_shared<listener>(ioc, ctx, tcp::endpoint{ address, port }, doc_root)->run();
 
-    // Run the I/O service on the requested number of threads
-    std::vector<std::thread> v;
+        // Run the I/O service on the requested number of threads
+        std::vector<std::thread> v;
 
-    v.reserve(threads - 1);
+        v.reserve(threads - 1);
 
-    for (auto i = threads - 1; i > 0; --i)
-        v.emplace_back([&ioc]{ioc.run();});
+        for (auto i = threads - 1; i > 0; --i)
+            v.emplace_back([&ioc]{ioc.run();});
 
-    ioc.run();
+        ioc.run();
+
+    }
+    catch (std::exception& e)
+    {
+        std::cerr << "EXCEPTION: " << e.what();
+    }
 
     return EXIT_SUCCESS;
 }

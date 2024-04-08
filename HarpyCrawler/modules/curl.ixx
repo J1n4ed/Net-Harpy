@@ -10,6 +10,7 @@ module;
 #include <cstdio>
 #include <windows.h>
 #include <curl/curl.h>
+#include <system_error>
 
 export module curl;
 
@@ -84,21 +85,35 @@ void harpy::Webget::curlGet()
 
     if (ready)
     {
-        curl = curl_easy_init();
+        curl = curl_easy_init();        
 
         if (curl) 
-        {       
-
+        {
             curl_easy_setopt(curl, CURLOPT_URL, host.c_str());
             curl_easy_setopt(curl, CURLOPT_PORT, port.c_str());
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1L);            
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &CurlWrite_CallbackFunc_StdString);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result);            
 
-            res = curl_easy_perform(curl);                   
+            try
+            {                
+                res = curl_easy_perform(curl);     
 
-            curl_easy_cleanup(curl);
+            }
+            catch (const std::system_error& e)
+            {
+                std::cout << "\nSomething went wront... url: " << host;
+            }            
+
+            try
+            {
+                curl_easy_cleanup(curl);
+            }
+            catch (const std::system_error& e)
+            {
+                std::cout << "\nSomething went wront... url: " << host;
+            }            
 
             host.clear();
             port.clear();
@@ -118,7 +133,7 @@ void harpy::Webget::setHost(std::string _host, std::string _port)
 std::string harpy::Webget::getData()
 {
     if (checkData())
-    {        
+    {         
         return result;
     }
     else
@@ -129,12 +144,22 @@ std::string harpy::Webget::getData()
 
 bool harpy::Webget::checkData()
 {
-    if (result.empty())
+    try
     {
-        return false;
+        if (result.empty())
+        {
+            return false;
+        }
+        else
+        {   
+            return true;
+        }
     }
-    else
-        return true;
+    catch (std::exception& e)
+    {
+        std::cerr << "\nEXCEPTION IN CURL: " << e.what();
+        return false;
+    }        
 }
 
 bool harpy::Webget::checkReady()

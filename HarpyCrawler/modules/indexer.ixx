@@ -15,6 +15,7 @@ module;
 #include <chrono>
 #include <ctime> 
 #include <map>
+#include <unordered_set>
 
 export module indexer;
 
@@ -51,6 +52,7 @@ namespace harpy
 		void process_string();
 		void findErase(std::string *, std::string, std::string);		
 		void buildWordLib();
+		std::vector<std::string> sort_links(const std::vector<std::string>& _links);
 		
 	}; // !Indexer
 
@@ -67,28 +69,80 @@ harpy::Indexer::Indexer(std::string _page, std::string _url, bool _isEnd)
 
 	// converting the page into vector of strings	
 
-	process_string();	
-
-	
+	process_string();		
 
 } // !Indexer
 
+// remove dupes
+std::vector<std::string> harpy::Indexer::sort_links(const std::vector<std::string>& _links)
+{
+	std::unordered_set<std::string> mySet;
+	std::vector<std::string> newVector;
+
+	for (const auto& el : _links)
+	{
+		mySet.insert(el);
+	}
+
+	for (auto& el : mySet)
+	{
+		newVector.push_back(el);
+	}
+
+	return newVector;	
+}
+
 void harpy::Indexer::process_string()
 {
-	SearchForNodesUsingLoop();
-	buildWordLib();
+	bool canContinue = true;
 
-	if (!links.empty())
-	{		
-		webpage.set_isLinksEmpty(false);
-		webpage.set_links(links);
-	}
-	else
+	try
 	{
-		webpage.set_isLinksEmpty(true);
+		SearchForNodesUsingLoop();
 	}
+	catch (std::exception & e)
+	{
+		std::cout << "\nEXCEPTION in Indexer: " << e.what();
+		canContinue = false;
+	}	
+
+	if (canContinue)
+	{
+
+		try
+		{
+			buildWordLib();
+		}
+		catch (std::exception& e)
+		{
+			std::cout << "\nEXCEPTION in Indexer: " << e.what();
+			canContinue = false;
+		}
+
+	}	
+
+	if (canContinue)
+	{
+
+		if (!links.empty())
+		{
+			webpage.set_isLinksEmpty(false);
+			webpage.set_links(links);
+		}
+		else
+		{			
+			webpage.set_isLinksEmpty(true);
+		}
 	
-	webpage.set_wordslib(wordsLib);
+		if (wordsLib.empty())
+		{
+			// skip
+		}
+		else
+		{			
+			webpage.set_wordslib(wordsLib);			
+		}	
+	}
 }
 
 // Me gusta
@@ -97,7 +151,19 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 	int counter = 1;
 	
 	std::string tmp;
-	std::string url;
+	std::string url = webpage.get_address();
+
+	// finding pure address for related links
+
+	{
+		size_t start = url.find("://");
+
+		if (start != std::string::npos)
+		{
+			size_t pos = url.find("/", start + 3);
+			url.erase(pos, url.size());
+		}
+	}	
 
 	bool titleFound = false;
 	bool modDateFound = false;
@@ -168,7 +234,7 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 			webpage.set_lastmod(tmp);
 
 			modDateFound = true;
-		}		
+		}				
 
 		// Recieved line, going thru looking for signs of links
 		if (!isEnd) // CHECK FOR LAST ITERATION IN DEPTH
@@ -193,20 +259,42 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 
 				size_t pos = line.size() - 1;
 
-				if (line.back() == '/')
+				bool relatedLink = false;
+
+				if (line.find("#") != std::string::npos)
 				{
-					line.erase(line.size());
+					line.erase(line.find("#"), line.size());
 				}
 				
-				if (line.find("http:") != std::string::npos || line.find("https:") != std::string::npos)
+				// remove last symbol if it's /
+				if (line.back() == '/')
 				{
+					line.erase(line.size());					
+				}
+
+				// related link
+				if (line.find("href=\"/") != std::string::npos)
+				{					
+					relatedLink = true;
+
+					size_t pos = line.find('/');
+					line.erase(0, pos);					
+				}
+				
+				if (line.find("http:") != std::string::npos || line.find("https:") != std::string::npos || relatedLink)
+				{
+					if (relatedLink)
+					{
+						line = url + line;
+					}
+					
 					auto startpos = line.find("http");
 					line.erase(0, startpos);
 
 					auto endpos = line.find("\"");
 					if (endpos != std::string::npos)
 					{
-						line.erase(endpos, line.size());		
+						line.erase(endpos, line.size());							
 
 						if (line.find(".pdf") != std::string::npos || line.find(".doc") != std::string::npos || line.find(".docx") != std::string::npos || line.find(".xls") != std::string::npos
 							|| line.find(".xlsx") != std::string::npos || line.find(".zip") != std::string::npos || line.find(".7z") != std::string::npos || line.find(".exe") != std::string::npos
@@ -217,7 +305,7 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 							// SKIP
 						}
 						else
-						{
+						{							
 							links.push_back(line);
 						}
 					}
@@ -244,7 +332,7 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 		delete now;
 	}
 	
-	{
+	{ // ERASE ENDLINES
 		page.erase(std::remove(page.begin(), page.end(), '\n'), page.cend());
 	}
 
@@ -280,7 +368,7 @@ void harpy::Indexer::findErase(std::string * _text, std::string _start, std::str
 {
 	while (_text->find(_start) != std::string::npos)
 	{
-		size_t start; // absurd large number for html to check for successful init
+		size_t start;
 		start = _text->find(_start);
 
 		if (start != std::string::npos) // if not trash value
@@ -303,24 +391,42 @@ harpy::WebPage harpy::Indexer::getResult()
 void harpy::Indexer::buildWordLib()
 {
 	// build unique_word array
+	std::string _page = page;	
 
-	std::string word;
-	std::istringstream iss(page);
-
-	do 
+	while (_page.find(' ') != std::string::npos || _page.find(' ') != _page.back())
 	{
-		iss >> word;
-
-		std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
-
-		std::transform(word.begin(), word.end(), word.begin(), towlower);		
-
-		if (!wordsLib.count(word))
-			wordsLib.insert(make_pair(word, 1));
+		if (_page.find(' ') == _page.front())
+		{
+			_page.erase(0, 1);
+		}
 		else
-			wordsLib[word]++;
+		{
+			size_t wordPosEnd = _page.find(' ');
+			std::string word;
 
-	} while (iss);
+			if (_page.size() == 0 || wordPosEnd >= _page.size())
+			{
+				break;
+			}
+
+			word = _page.substr(0, wordPosEnd);
+			_page.erase(0, wordPosEnd + 1);			
+
+			std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
+
+			std::transform(word.begin(), word.end(), word.begin(), towlower);
+
+			// Skip small words
+			if (word.size() >= 3)
+			{
+				if (!wordsLib.count(word))
+					wordsLib.insert(make_pair(word, 1));
+				else
+					wordsLib[word]++;
+			}
+		}
+
+	}
 
 	std::vector<std::string> for_removal;
 	

@@ -18,6 +18,8 @@ module;
 // Custom includes
 #include "..\headers\shared_types.h"
 
+#define MAX_SEARCH_OUTPUT 20
+
 export module database;
 
 namespace harpy
@@ -389,21 +391,32 @@ void harpy::DBASE::write_data(std::vector<harpy::WebPage> & _webPages)
 
 			 if (!word_check.empty())
 			 {
+				 // std::cout << "\n> Word: " << current_word << " is found in database!";
+
 				 Pairs par;
 
 				for (const auto & iter : word_check)
 				{					
-					Wt::Dbo::collection <Wt::Dbo::ptr<crossings> > word_cross = iter->id;					
+					Wt::Dbo::collection <Wt::Dbo::ptr<crossings> > word_cross = iter->id;		
+
+					// std::cout << "\n> Number of entreese: " << word_cross.size();
 
 					for (const auto& iter_cross : word_cross)
 					{
 						par.page_id = iter_cross->page;
 						par.page_relevance = iter_cross->repeats;
-					}
-				}
 
-				search_set.push_back(par);
+						/*std::cout << "\n> PAGE: " << par.page_id->url << '\n'
+							<< "> RELEVANCE: " << par.page_relevance;*/
+
+						search_set.push_back(par);
+					}
+				}				
 			
+			 }
+			 else
+			 {
+				 // std::cout << "\n> Word: " << current_word << " not found!";
 			 }
 		 }
 		 catch (Wt::Dbo::Exception& ex)
@@ -435,12 +448,12 @@ void harpy::DBASE::write_data(std::vector<harpy::WebPage> & _webPages)
 			 }
 		 }		
 
-		 std::cout << "\n> Relevance map finished, printing:\n\n";
+		 // std::cout << "\n> Relevance map finished, printing:\n\n";
 
-		 for (const auto& element : relevance)
+		 /*for (const auto& element : relevance)
 		 {
 			 std::cout << "\n> Relevance: " << element.second << "\nTitle: " << element.first.title << "\nURL: " << element.first.url << "\n---------------";
-		 }
+		 }*/
 		 
 		 // FORM RETURN STRING, LIST OF WEBSITES
 
@@ -453,6 +466,12 @@ void harpy::DBASE::write_data(std::vector<harpy::WebPage> & _webPages)
 			 result += ("<li><div><p>Result #" + std::to_string(count) + ", relevance: " + std::to_string(page.second)) + "</p>" +
 				 "<p><a href=\"" + page.first.url + "\">" + page.first.title + "</a></p>" + "</div></li>";
 			 ++count;
+
+			 // LIMITER (maximum number of search results displayed (default = 20)
+			 if (count == MAX_SEARCH_OUTPUT)
+			 {
+				 break;
+			 }
 		 }		 
 
 		 result += "</ul>";

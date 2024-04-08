@@ -471,5 +471,6 @@ FodyWeavers.xsd
 # Additional files built by Visual Studio
 
 Other/*
+srv_crt/*
 
 # End of https://www.toptal.com/developers/gitignore/api/windows,c++,git,visualstudio
