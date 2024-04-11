@@ -41,10 +41,9 @@ namespace harpy
 		std::string page;
 		harpy::WebPage webpage;	
 		bool isEnd = false;
-
-		std::vector<std::string> links;
-		
+		std::vector<std::string> links;		
 		std::map<std::string, int> wordsLib;
+		bool debug = false;
 
 		// PRIVATE METHODS DECL
 			
@@ -66,6 +65,12 @@ harpy::Indexer::Indexer(std::string _page, std::string _url, bool _isEnd)
 	isEnd = _isEnd;
 
 	webpage.set_address(_url);	
+
+	// USE THIS TO SWITCH ON DEBUG OUTPUT FOR SPECIFIC URL
+	// DEBUG
+	/*if (_url == "https://wiki.openssl.org/index.php/Use_of_Git")
+		debug = true;*/
+	// !DEBUG
 
 	// converting the page into vector of strings	
 
@@ -95,6 +100,13 @@ std::vector<std::string> harpy::Indexer::sort_links(const std::vector<std::strin
 void harpy::Indexer::process_string()
 {
 	bool canContinue = true;
+
+	// DEBUG
+	if (debug)
+	{
+		std::cout << "\n> DEBUG: Debug is on for URL " << webpage.get_address();
+	}
+	// !DEBUG
 
 	try
 	{
@@ -315,6 +327,19 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 					break;
 				}
 			}
+
+			// DEBUG
+			if (debug)
+			{
+				std::cout << "\n> DEBUG: Links found for URL " << webpage.get_address();
+				
+				for (const auto& el : links)
+				{
+					std::cout << "\n- " << el;
+				}
+			}
+			// !DEBUG
+
 		} // !CHECK FOR LAST ITERATION IN DEPTH
 	
 }
@@ -393,71 +418,95 @@ void harpy::Indexer::buildWordLib()
 	// build unique_word array
 	std::string _page = page;	
 
-	while (_page.find(' ') != std::string::npos || _page.find(' ') != _page.back())
+	// DEBUG
+	if (debug)
 	{
-		if (_page.find(' ') == _page.front())
-		{
-			_page.erase(0, 1);
-		}
-		else
-		{
-			size_t wordPosEnd = _page.find(' ');
-			std::string word;
-
-			if (_page.size() == 0 || wordPosEnd >= _page.size())
-			{
-				break;
-			}
-
-			word = _page.substr(0, wordPosEnd);
-			_page.erase(0, wordPosEnd + 1);			
-
-			std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
-
-			std::transform(word.begin(), word.end(), word.begin(), towlower);
-
-			// Skip small words
-			if (word.size() >= 3)
-			{
-				if (!wordsLib.count(word))
-					wordsLib.insert(make_pair(word, 1));
-				else
-					wordsLib[word]++;
-			}
-		}
-
+		std::cout << "\n> DEBUG:page size = " << _page.size();		
 	}
+	// !DEBUG
 
-	std::vector<std::string> for_removal;
+	if (_page.size() != 0)
+	{
+
+		while (_page.find(' ') != std::string::npos || _page.find(' ') != _page.back())
+		{
+			if (_page.find(' ') == _page.front())
+			{
+				_page.erase(0, 1);
+			}
+			else
+			{
+				size_t wordPosEnd = _page.find(' ');
+				std::string word;
+
+				if (_page.size() == 0 || wordPosEnd >= _page.size())
+				{
+					break;
+				}
+
+				word = _page.substr(0, wordPosEnd);
+				_page.erase(0, wordPosEnd + 1);			
+
+				std::transform(word.begin(), word.end(), word.begin(), [](unsigned char c) { return std::tolower(c); });
+
+				std::transform(word.begin(), word.end(), word.begin(), towlower);
+
+				// Skip small words
+				if (word.size() >= 3)
+				{
+					if (!wordsLib.count(word))
+						wordsLib.insert(make_pair(word, 1));
+					else
+						wordsLib[word]++;
+				}
+			}
+
+		}
+
+		std::vector<std::string> for_removal;
 	
-	// remove short and long words
-	for (const auto element : wordsLib)
-	{
-		if (element.first.length() < 4)
+		// remove short and long words
+		for (const auto element : wordsLib)
 		{
-			for_removal.push_back(element.first);
-		}
+			if (element.first.length() < 3)
+			{
+				for_removal.push_back(element.first);
+			}
 		
-		if (element.first.length() > 14)
-		{
-			for_removal.push_back(element.first);
-		}
+			if (element.first.length() > 14)
+			{
+				for_removal.push_back(element.first);
+			}
 		
-		if (	element.first._Starts_with("?") || element.first._Starts_with("¹") || element.first._Starts_with(" ") 
-			||  element.first._Starts_with("(") || element.first._Starts_with(".") || element.first._Starts_with("0")
-			||	element.first._Starts_with("1") || element.first._Starts_with("2") || element.first._Starts_with("3") 
-			||  element.first._Starts_with("4")	|| element.first._Starts_with("5") || element.first._Starts_with("6") 
-			||  element.first._Starts_with("7") || element.first._Starts_with("8") || element.first._Starts_with("9") 
-			||  element.first._Starts_with("&"))
-		{
-			for_removal.push_back(element.first);
+			if (	element.first._Starts_with("?") || element.first._Starts_with("¹") || element.first._Starts_with(" ") 
+				||  element.first._Starts_with("(") || element.first._Starts_with(".") || element.first._Starts_with("0")
+				||	element.first._Starts_with("1") || element.first._Starts_with("2") || element.first._Starts_with("3") 
+				||  element.first._Starts_with("4")	|| element.first._Starts_with("5") || element.first._Starts_with("6") 
+				||  element.first._Starts_with("7") || element.first._Starts_with("8") || element.first._Starts_with("9") 
+				||  element.first._Starts_with("&"))
+			{
+				for_removal.push_back(element.first);
+			}
 		}
-	}
 
-	for (const auto element : for_removal)
-	{
-		wordsLib.erase(element);
-	}
+		for (const auto element : for_removal)
+		{
+			wordsLib.erase(element);
+		}
 
-	for_removal.clear();
+		for_removal.clear();
+
+		// DEBUG
+		if (debug)
+		{
+			std::cout << "\n> DEBUG: Printing words library for URL " << webpage.get_address();
+
+			for (const auto& el : wordsLib)
+			{
+				std::cout << "\n- " << el.first << ", repeats = " << el.second;
+			}
+		}
+		// !DEBUG
+
+	}
 }
