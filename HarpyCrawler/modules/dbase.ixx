@@ -239,7 +239,7 @@ void harpy::DBASE::process_pages(std::vector<harpy::WebPage>& _webPages)
 		// std::cout << "\n> Datgabase job: vector of pages is empty... nothing is written";
 	}
 
-	std::cout << "\n> Operations complete!";
+	std::cout << "\n> Operations complete!\n----------------------------------------------------\n\n";
 }
 
 void harpy::DBASE::write_data(harpy::WebPage & webpage)
@@ -265,7 +265,7 @@ void harpy::DBASE::write_data(harpy::WebPage & webpage)
 		for (auto webword : extracted_words)
 		{			
 			std::string keyword = webword.first;
-			int numRepeats = webword.second;
+			// int numRepeats = webword.second;
 
 			Wt::Dbo::collection < Wt::Dbo::ptr<words> > w1  = _session.find<words>().where("word = ?").bind(keyword.c_str());
 
@@ -292,34 +292,110 @@ void harpy::DBASE::build_crossings(harpy::WebPage & webpage)
 
 	for (auto webword : extracted_words)
 	{
-		std::string keyword = webword.first;						
+		std::string keyword = webword.first;	
+
+		// DEBUG
+		bool debug = false;
+		/*if (keyword == "openssl")
+		{
+			std::cout << "\n> word: openssl is processed into DB. ";
+			debug = true;
+		}*/
 
 		try
 		{
 			Wt::Dbo::Transaction transaction(_session);
 
-			Wt::Dbo::collection < Wt::Dbo::ptr<crossings> > crossing_w = _session.find<crossings>().where("word_id = ?").bind(_session.find<words>().where("word = ?").bind(keyword.c_str()).resultValue().id());
 			Wt::Dbo::collection < Wt::Dbo::ptr<crossings> > crossing_p = _session.find<crossings>().where("page_id = ?").bind(_session.find<pages>().where("url = ?").bind(url.c_str()).resultValue().id());
+			Wt::Dbo::collection < Wt::Dbo::ptr<crossings> > crossing_w = _session.find<crossings>().where("word_id = ?").bind(_session.find<words>().where("word = ?").bind(keyword.c_str()).resultValue().id());	
 
-			if (crossing_p.empty()) // page do not exist
+			// Wt::Dbo::ptr<words> kw = _session.find<words>().where("word = ?").bind(keyword);
+
+			bool cross_p = crossing_p.empty();
+			// bool cross_w = crossing_w.empty();
+			bool cross_w = true;
+
+			if (!cross_p)
 			{
+				for (const auto& el : crossing_p)
+				{
+					if (el->word->word == keyword)
+					{
+						cross_w = false;
+					}
+				}
+			}
+			else
+			{
+				cross_w = crossing_w.empty();
+			}
+
+			// DEBUG
+			if (debug)
+			{
+				std::cout << "\n> DEBUG: cross_p: ";
+
+				if (cross_p)
+					std::cout << "true";
+				else
+					std::cout << "false";
+
+				std::cout << ", cross_w: ";
+
+				if (cross_w)
+					std::cout << "true";
+				else
+					std::cout << "false";
+			}
+
+			if (cross_p) // page do not exist
+			{
+				// DEBUG
+				if (debug)
+				{
+					std::cout << "\nPage not found, making new page.";
+				}
+
 				std::unique_ptr<crossings> cross(new crossings);
 				cross->repeats = webword.second;
 				Wt::Dbo::ptr<crossings> new_cross = _session.add(std::move(cross));
 				_session.find<pages>().where("url = ?").bind(url).resultValue().modify()->cross.insert(new_cross);
 				_session.find<words>().where("word = ?").bind(keyword).resultValue().modify()->cross.insert(new_cross);						
 			}
-			else if (!crossing_p.empty() && crossing_w.empty()) // page exists, word is not
+			else if (!cross_p && cross_w) // page exists, word is not
 			{
+				// DEBUG
+				if (debug)
+				{
+					std::cout << "\nPage exists, adding extra crossing.";
+				}
+
 				std::unique_ptr<crossings> cross(new crossings);
 				cross->repeats = webword.second;
 				Wt::Dbo::ptr<crossings> new_cross = _session.add(std::move(cross));
 				_session.find<pages>().where("url = ?").bind(url).resultValue().modify()->cross.insert(new_cross);
 				_session.find<words>().where("word = ?").bind(keyword).resultValue().modify()->cross.insert(new_cross);
 			}
-			else // page-word pair both exists
+			else if (cross_p && !cross_w) // page not exist, word exists
+			{
+				// this branch shouldn't be used
+
+				// DEBUG
+				if (debug)
+				{
+					std::cout << "\nPage exists, adding extra crossing.";
+				}
+
+			}
+			else if (!cross_p && !cross_w)// page-word pair both exists
 			{
 				// UPDATE CROSSING WITH NEW VALUE
+
+				// DEBUG
+				if (debug)
+				{
+					std::cout << "\nUpdating existing value for page & word.";
+				}
 								 
 				Wt::Dbo::collection < Wt::Dbo::ptr<crossings> > this_cross = _session.find<crossings>().where("page_id = ?").bind(_session.find<pages>().where("url = ?").bind(url.c_str()).resultValue().id());
 
@@ -341,6 +417,14 @@ void harpy::DBASE::build_crossings(harpy::WebPage & webpage)
 				}*/				
 
 				// TO-DO
+			}
+			else
+			{
+				// ?? que
+				if (debug)
+				{
+					std::cout << "\n> DEBUG: Unexpected behavior in db write data...";
+				}
 			}
 
 			transaction.commit();

@@ -64,17 +64,26 @@ harpy::Indexer::Indexer(std::string _page, std::string _url, bool _isEnd)
 	page = _page;
 	isEnd = _isEnd;
 
-	webpage.set_address(_url);	
+	if (!page.empty())
+	{
+		// DEBUG
+		// std::cout << "\n> PAGE RECIEVED FOR PROCESSING, PRINTING: \n\n" << page << "\n\n";
+		// std::system("pause");		
 
-	// USE THIS TO SWITCH ON DEBUG OUTPUT FOR SPECIFIC URL
-	// DEBUG
-	/*if (_url == "https://wiki.openssl.org/index.php/Use_of_Git")
-		debug = true;*/
-	// !DEBUG
+		webpage.set_address(_url);	
 
-	// converting the page into vector of strings	
+		// USE THIS TO SWITCH ON DEBUG OUTPUT FOR SPECIFIC URL
+		// DEBUG
+		/*
+		if (_url == "https://wiki.openssl.org/index.php/Main_Page")
+			debug = true;
+		*/
+		// !DEBUG
 
-	process_string();		
+		// converting the page into vector of strings	
+
+		process_string();	
+	}
 
 } // !Indexer
 
@@ -217,6 +226,12 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 
 	} // !TITLE FINDER
 		
+	// DEBUG
+	if (debug)
+	{
+		std::cout << "\n> Line by line processing...\n\n";
+	}
+
 	while (page.find("\n", linePosBegin) != std::string::npos)
 	{
 		linePosEnd = page.find("\n", linePosBegin);
@@ -227,6 +242,12 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 		}
 
 		std::string line = page.substr(linePosBegin, linePosEnd);
+
+		//DEBUG
+		/*if (debug)
+		{
+			std::cout << '\n' << line;
+		}*/
 
 		linePosBegin = ++linePosEnd;		
 
@@ -276,6 +297,11 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 				if (line.find("#") != std::string::npos)
 				{
 					line.erase(line.find("#"), line.size());
+				}
+
+				if (line.find("&") != std::string::npos)
+				{
+					line.erase(line.find("&"), line.size());
 				}
 				
 				// remove last symbol if it's /
@@ -341,8 +367,18 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 			// !DEBUG
 
 		} // !CHECK FOR LAST ITERATION IN DEPTH
+			
+	} // !WHILE
+
 	
-}
+
+	// DEBUG
+	/*if (debug)
+	{
+		std::system("pause");
+
+		std::cout << "\n> HALFWAY PAGE PROCESS RESULT:\n\n" << page << "\n\n";
+	}*/
 
 	if (!modDateFound)
 	{
@@ -358,15 +394,27 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 	}
 	
 	{ // ERASE ENDLINES
-		page.erase(std::remove(page.begin(), page.end(), '\n'), page.cend());
+		// page.erase(std::remove(page.begin(), page.end(), '\n'), page.cend());
+
+		// replace instead of erase
+		std::regex pattern;
+		pattern = "\n";
+		page = regex_replace(page, pattern, " ");
 	}
 
 	// remove scripts
 	findErase(&page, "<script>", "</script>");
 	findErase(&page, "/script>", ">");
-	
-	// REGEXP	
 
+	// DEBUG
+	/*if (debug)
+	{
+		std::system("pause");
+
+		std::cout << "\n> SCRIPT REMOVAL DONE:\n\n" << page << "\n\n";
+	}*/
+	
+	// REGEXP
 	std::regex pattern("\\<.*?\\>");
 	page = regex_replace(page, pattern, " ");
 	
@@ -379,14 +427,41 @@ void harpy::Indexer::SearchForNodesUsingLoop()
 	pattern = "\t";
 	page = regex_replace(page, pattern, " ");	
 
+	// DEBUG
+	/*if (debug)
+	{
+		std::system("pause");
+
+		std::cout << "\n> REGEXPS DONE:\n\n" << page << "\n\n";
+	}*/
+
 	std::remove_if(page.begin(), page.end(), ispunct);
 
 	page.erase(std::remove_if(page.begin(), page.end(), ::isdigit), page.end());
 
+	// DEBUG
+	/*if (debug)
+	{
+		std::system("pause");
+
+		std::cout << "\n> PUNCT & DIGITS REMOVAL DONE:\n\n" << page << "\n\n";
+	}*/
+
 	// Spaces
 
 	std::string::iterator new_end = std::unique(page.begin(), page.end(), &harpy::BothAreSpaces);
-	page.erase(new_end, page.end());	
+	page.erase(new_end, page.end());
+
+	// DEBUG
+	if (debug)
+	{
+		std::system("pause");
+
+		std::cout << "\n> EXTRA SPACES REMOVAL DONE:\n\n" << page << "\n\n";
+	}
+
+	// DEBUG
+	// std::cout << "\n> DEBUG: PRINTING RESULT PAGE...\n\n" << page << "\n\n ------------------------------------------\n";
 }
 
 void harpy::Indexer::findErase(std::string * _text, std::string _start, std::string _end)
@@ -421,13 +496,13 @@ void harpy::Indexer::buildWordLib()
 	// DEBUG
 	if (debug)
 	{
+		system("pause");
 		std::cout << "\n> DEBUG:page size = " << _page.size();		
 	}
 	// !DEBUG
 
 	if (_page.size() != 0)
 	{
-
 		while (_page.find(' ') != std::string::npos || _page.find(' ') != _page.back())
 		{
 			if (_page.find(' ') == _page.front())
@@ -455,19 +530,48 @@ void harpy::Indexer::buildWordLib()
 				if (word.size() >= 3)
 				{
 					if (!wordsLib.count(word))
+					{
 						wordsLib.insert(make_pair(word, 1));
+						
+						if (debug)
+						{
+							std::cout << "\n> new word added to lib: " << word;
+						}
+
+					}
 					else
+					{
 						wordsLib[word]++;
+
+						if (debug)
+						{
+							std::cout << "\n> repeat for word added to lib: " << word;
+						}
+					}
 				}
 			}
 
+			if (_page.empty())
+				break;
 		}
 
 		std::vector<std::string> for_removal;
+
+		if (debug)
+		{
+			std::system("pause");
+			std::cout << "\n\n> CLEANUP OF WORDSLIB\n\n";
+		}
 	
 		// remove short and long words
 		for (const auto element : wordsLib)
 		{
+			// DEBUG
+			if (debug)
+			{
+				std::cout << "\n> word: " << element.first << ", result: ";
+			}
+
 			if (element.first.length() < 3)
 			{
 				for_removal.push_back(element.first);
@@ -477,16 +581,78 @@ void harpy::Indexer::buildWordLib()
 			{
 				for_removal.push_back(element.first);
 			}
+
+			// DEBUG
+			if (element.first == "openssl")
+			{
+				std::cout << "\n> word: openssl found in URL: " << webpage.get_address();
+			}
 		
+			/*
+			// some cleanups
 			if (	element.first._Starts_with("?") || element.first._Starts_with("¹") || element.first._Starts_with(" ") 
 				||  element.first._Starts_with("(") || element.first._Starts_with(".") || element.first._Starts_with("0")
 				||	element.first._Starts_with("1") || element.first._Starts_with("2") || element.first._Starts_with("3") 
 				||  element.first._Starts_with("4")	|| element.first._Starts_with("5") || element.first._Starts_with("6") 
 				||  element.first._Starts_with("7") || element.first._Starts_with("8") || element.first._Starts_with("9") 
-				||  element.first._Starts_with("&"))
+				||  element.first._Starts_with("&")
+				)
 			{
 				for_removal.push_back(element.first);
 			}
+			*/			
+
+			//// extremely lazy filtering
+			//if (	element.first.rfind("A", 0) == std::string::npos || element.first.rfind("B", 0) == std::string::npos || element.first.rfind("C", 0) == std::string::npos || element.first.rfind("D", 0) == std::string::npos || element.first.rfind("E", 0) == std::string::npos
+			//	||	element.first.rfind("F", 0) == std::string::npos || element.first.rfind("G", 0) == std::string::npos || element.first.rfind("H", 0) == std::string::npos || element.first.rfind("I", 0) == std::string::npos || element.first.rfind("J", 0) == std::string::npos
+			//	||	element.first.rfind("K", 0) == std::string::npos || element.first.rfind("L", 0) == std::string::npos || element.first.rfind("M", 0) == std::string::npos || element.first.rfind("N", 0) == std::string::npos || element.first.rfind("O", 0) == std::string::npos
+			//	||  element.first.rfind("P", 0) == std::string::npos || element.first.rfind("Q", 0) == std::string::npos || element.first.rfind("R", 0) == std::string::npos || element.first.rfind("S", 0) == std::string::npos || element.first.rfind("T", 0) == std::string::npos
+			//	||  element.first.rfind("U", 0) == std::string::npos || element.first.rfind("V", 0) == std::string::npos || element.first.rfind("W", 0) == std::string::npos || element.first.rfind("X", 0) == std::string::npos || element.first.rfind("Y", 0) == std::string::npos
+			//	||  element.first.rfind("Z", 0)
+			//	||  element.first.rfind("a", 0) == std::string::npos || element.first.rfind("b", 0) == std::string::npos || element.first.rfind("c", 0) == std::string::npos || element.first.rfind("d", 0) == std::string::npos || element.first.rfind("y", 0) == std::string::npos
+			//	||  element.first.rfind("f", 0) == std::string::npos || element.first.rfind("g", 0) == std::string::npos || element.first.rfind("h", 0) == std::string::npos || element.first.rfind("i", 0) == std::string::npos || element.first.rfind("j", 0) == std::string::npos
+			//	||  element.first.rfind("k", 0) == std::string::npos || element.first.rfind("l", 0) == std::string::npos || element.first.rfind("m", 0) == std::string::npos || element.first.rfind("n", 0) == std::string::npos || element.first.rfind("o", 0) == std::string::npos
+			//	||  element.first.rfind("p", 0) == std::string::npos || element.first.rfind("q", 0) == std::string::npos || element.first.rfind("r", 0) == std::string::npos || element.first.rfind("s", 0) == std::string::npos || element.first.rfind("t", 0) == std::string::npos
+			//	||  element.first.rfind("u", 0) == std::string::npos || element.first.rfind("v", 0) == std::string::npos || element.first.rfind("w", 0) == std::string::npos || element.first.rfind("x", 0) == std::string::npos || element.first.rfind("y", 0) == std::string::npos
+			//	||  element.first.rfind("z", 0)
+			//	||  element.first.rfind("À", 0) == std::string::npos || element.first.rfind("Á", 0) == std::string::npos || element.first.rfind("Â", 0) == std::string::npos || element.first.rfind("Ã", 0) == std::string::npos || element.first.rfind("Ä", 0) == std::string::npos
+			//	||  element.first.rfind("Å", 0) == std::string::npos || element.first.rfind("¨", 0) == std::string::npos || element.first.rfind("Æ", 0) == std::string::npos || element.first.rfind("Ç", 0) == std::string::npos || element.first.rfind("È", 0) == std::string::npos
+			//	||  element.first.rfind("É", 0) == std::string::npos || element.first.rfind("Ê", 0) == std::string::npos || element.first.rfind("Ë", 0) == std::string::npos || element.first.rfind("Ì", 0) == std::string::npos || element.first.rfind("Í", 0) == std::string::npos
+			//	||  element.first.rfind("Î", 0) == std::string::npos || element.first.rfind("Ï", 0) == std::string::npos || element.first.rfind("Ð", 0) == std::string::npos || element.first.rfind("Ñ", 0) == std::string::npos || element.first.rfind("Ò", 0) == std::string::npos
+			//	||  element.first.rfind("Ó", 0) == std::string::npos || element.first.rfind("Ô", 0) == std::string::npos || element.first.rfind("Õ", 0) == std::string::npos || element.first.rfind("Ö", 0) == std::string::npos || element.first.rfind("×", 0) == std::string::npos
+			//	||  element.first.rfind("Ø", 0) == std::string::npos || element.first.rfind("Ù", 0) == std::string::npos || element.first.rfind("Û", 0) == std::string::npos || element.first.rfind("Ý", 0) == std::string::npos || element.first.rfind("Þ", 0) == std::string::npos
+			//	||  element.first.rfind("ß", 0)
+			//	||  element.first.rfind("à", 0) == std::string::npos || element.first.rfind("á", 0) == std::string::npos || element.first.rfind("â", 0) == std::string::npos || element.first.rfind("ã", 0) == std::string::npos || element.first.rfind("ä", 0) == std::string::npos
+			//	||  element.first.rfind("å", 0) == std::string::npos || element.first.rfind("¸", 0) == std::string::npos || element.first.rfind("æ", 0) == std::string::npos || element.first.rfind("ç", 0) == std::string::npos || element.first.rfind("è", 0) == std::string::npos
+			//	||  element.first.rfind("é", 0) == std::string::npos || element.first.rfind("ê", 0) == std::string::npos || element.first.rfind("ë", 0) == std::string::npos || element.first.rfind("ì", 0) == std::string::npos || element.first.rfind("í", 0) == std::string::npos
+			//	||  element.first.rfind("î", 0) == std::string::npos || element.first.rfind("ï", 0) == std::string::npos || element.first.rfind("ð", 0) == std::string::npos || element.first.rfind("ñ", 0) == std::string::npos || element.first.rfind("ò", 0) == std::string::npos
+			//	||  element.first.rfind("ó", 0) == std::string::npos || element.first.rfind("ô", 0) == std::string::npos || element.first.rfind("õ", 0) == std::string::npos || element.first.rfind("ö", 0) == std::string::npos || element.first.rfind("÷", 0) == std::string::npos
+			//	||  element.first.rfind("ø", 0) == std::string::npos || element.first.rfind("ù", 0) == std::string::npos || element.first.rfind("û", 0) == std::string::npos || element.first.rfind("ý", 0) == std::string::npos || element.first.rfind("þ", 0) == std::string::npos
+			//	||  element.first.rfind("ÿ", 0) == std::string::npos
+			//	)
+			//{
+			//	for_removal.push_back(element.first);
+
+			//	// DEBUG
+			//	if (debug)
+			//	{
+			//		std::cout << "FOR REMOVAL";
+			//	}
+			//}
+			//else
+			//{
+			//	// DEBUG
+			//	if (debug)
+			//	{
+			//		std::cout << "ALLOWED TO DATABASE";
+			//	}
+			//}
+
+			// DEBUG, ONLY 1 DEBUG WORD REMAINS <--------------------------------------------------------------- REMOVE!
+			/*if (element.first != "openssl" && element.first != "get" && element.first != "open")
+			{
+				for_removal.push_back(element.first);
+			}*/
 		}
 
 		for (const auto element : for_removal)
@@ -499,6 +665,7 @@ void harpy::Indexer::buildWordLib()
 		// DEBUG
 		if (debug)
 		{
+			std::system("pause");
 			std::cout << "\n> DEBUG: Printing words library for URL " << webpage.get_address();
 
 			for (const auto& el : wordsLib)
@@ -507,6 +674,5 @@ void harpy::Indexer::buildWordLib()
 			}
 		}
 		// !DEBUG
-
 	}
 }
